@@ -71,6 +71,7 @@
   .cal { margin-top: 0; }
   .cal .day { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 2px; }
   .cal .day:first-child { margin-top: 0; }
+  .cal .tag { font-size: 11px; font-weight: 600; border: 1px solid var(--text); border-radius: 999px; padding: 1px 7px; margin-left: 4px; white-space: nowrap; }
   .cal .time { font-size: 13px; color: var(--muted); width: 128px; flex: none; }
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 22px; }
 </style>
@@ -150,6 +151,7 @@
       cal.days.map(function (d) {
         return '<div class="day">' + esc(d.day) + '</div>' + d.events.map(function (ev) {
           return '<div class="item"><span class="time">' + esc(ev.time) + '</span><div><div class="t">' + esc(ev.title) +
+            (ev.cal ? ' <span class="tag">' + esc(ev.cal) + '</span>' : '') +
             '</div>' + (ev.where ? '<div class="n">' + esc(ev.where) + '</div>' : '') + '</div></div>';
         }).join('');
       }).join('');
