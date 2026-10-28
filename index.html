@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F&amp;F Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f4f4; --card: #ffffff; --text: #111111; --muted: #6b6a66; --line: #e6e4de;
+    --red-bg: #fcebeb; --red: #791f1f; --green-bg: #e1f5ee; --green: #085041;
+    --pink-bg: #fbeaf0; --pink: #72243e; --blue-bg: #e6f1fb; --blue: #0c447c;
+    --amber-bg: #faeeda; --amber: #633806; --ok: #0f6e56; --brand-bg: #000000; --brand: #000000;
+  }
+  [hidden] { display: none !important; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111111; --card: #1d1d1d; --text: #f4f4f4; --muted: #a9a79f; --line: #34332f;
+      --red-bg: #501313; --red: #f7c1c1; --green-bg: #04342c; --green: #9fe1cb;
+      --pink-bg: #4b1528; --pink: #f4c0d1; --blue-bg: #042c53; --blue: #b5d4f4;
+      --amber-bg: #412402; --amber: #fac775; --ok: #5dcaa5; --brand-bg: #000000; --brand: #ffffff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 Arimo, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .bar { background: #000; color: #fff; }
+  .bar div { max-width: 520px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .bar a { color: #fff; text-decoration: none; }
+  .bar .home { flex: none; width: 44px; height: 44px; border-radius: 12px; border: 1.5px solid #fff;
+    display: flex; align-items: center; justify-content: center; }
+  .bar .home img { height: 30px; display: block; }
+  .bar .word { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .bar .word img { height: 20px; width: auto; max-width: 100%; display: block; filter: invert(1); }
+  .bar .word span { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.8; }
+  .bar .back { margin-left: auto; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  main { max-width: 520px; margin: 0 auto; padding: 18px 16px 32px; }
+  .hello { margin-bottom: 16px; }
+  h1 { font-size: 21px; margin: 0; font-weight: 700; }
+  .sub { font-size: 13px; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    min-height: 104px; border-radius: 16px; text-decoration: none; font-weight: 700; font-size: 15px;
+    text-align: center; padding: 14px 8px; -webkit-tap-highlight-color: transparent;
+    background: var(--card); color: var(--text); border: 1.5px solid var(--text); }
+  .tile:active { transform: scale(0.97); background: var(--text); color: var(--card); }
+  .tile .icon { font-size: 30px; line-height: 1; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-top: 16px; border: 1px solid var(--line); }
+  .card h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+  .vehicle + .vehicle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .vehicle h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; color: var(--muted); }
+  .van { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+  .pill.OK { background: var(--green-bg); color: var(--green); }
+  .pill.Due { background: var(--amber-bg); color: var(--amber); }
+  .pill.Overdue { background: var(--red-bg); color: var(--red); }
+  .item { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .item:first-of-type { border-top: 0; }
+  .check { color: var(--ok); font-size: 18px; line-height: 1.2; flex: none; }
+  .item .t { font-size: 14px; font-weight: 500; }
+  .count { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .dot { color: var(--red); font-size: 18px; line-height: 1.2; flex: none; }
+  .item .n { font-size: 13px; color: var(--muted); }
+  .empty { font-size: 14px; color: var(--muted); }
+  .links a { display: flex; justify-content: space-between; padding: 11px 0; border-top: 1px solid var(--line);
+    color: var(--text); text-decoration: none; font-size: 15px; }
+  .links a:first-of-type { border-top: 0; }
+  .links a span { color: var(--muted); }
+  .cal { margin-top: 0; }
+  .cal .day { font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 2px; }
+  .cal .day:first-child { margin-top: 0; }
+  .cal .time { font-size: 13px; color: var(--muted); width: 128px; flex: none; }
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 22px; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div>
+    <a class="home" id="logo" href="#" aria-label="F&amp;F Dashboard home"><img id="logoIcon" alt=""></a>
+    <a class="word" id="logoLink" href="#"><img id="logoWord" alt="Fluff and Fold"><span>Dashboard</span></a>
+    <a class="back" id="back" href="#" hidden>‹ Home</a>
+  </div>
+</header>
+<main>
+  <div class="hello">
+    <h1 id="greet">Hi, team</h1>
+    <div class="sub" id="sub"></div>
+  </div>
+
+  <div id="homePage">
+  <nav class="tiles" id="tiles" aria-label="What do you need to do?"></nav>
+
+  <section class="card" id="vanCard" hidden>
+    <h2>🚐 Vehicles</h2>
+    <div id="vehicles"></div>
+  </section>
+
+  <section class="card">
+    <h2>🚩 Open Issues <span class="count" id="openCount"></span></h2>
+    <div id="open"></div>
+  </section>
+
+  <section class="card">
+    <h2>✅ Recently Handled</h2>
+    <div id="recent"></div>
+  </section>
+
+  </div>
+
+  <section class="card links" id="linksPage" hidden>
+    <div id="links"></div>
+  </section>
+
+  <section class="card cal" id="calendarPage" hidden></section>
+
+  <footer>F&amp;F Dashboard · Fluff &amp; Fold Modesto · questions? Ask Mike</footer>
+</main>
+
+<script>
+  var el = function (id) { return document.getElementById(id) };
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    })
+  };
+  var fmt = function (n) { return Math.round(n).toLocaleString('en-US') };
+
+  // Fills the page from the hub data (see hubData_ in StaffHub.js).
+  function render(data) {
+
+  el('logoIcon').src = data.logos.icon;
+  el('logoWord').src = data.logos.horizontal;
+  el('logo').href = data.home;
+  el('logoLink').href = data.home;
+  el('back').href = data.home;
+  var subPages = { links: '🔗 Links', calendar: '📅 Company Calendar' };
+  if (subPages[data.page]) {
+    el('homePage').hidden = true;
+    el(data.page + 'Page').hidden = false;
+    el('back').hidden = false;
+    el('greet').textContent = subPages[data.page];
+    el('sub').textContent = 'Tap the logo to go home';
+  }
+  if (data.page === 'calendar') {
+    var cal = data.calendar;
+    el('calendarPage').innerHTML = !cal ? '<div class="empty">The calendar couldn\'t load. Try again in a minute, or ask Mike.</div>' :
+      !cal.days.length ? '<div class="empty">Nothing on the calendar through ' + esc(cal.through) + '.</div>' :
+      cal.days.map(function (d) {
+        return '<div class="day">' + esc(d.day) + '</div>' + d.events.map(function (ev) {
+          return '<div class="item"><span class="time">' + esc(ev.time) + '</span><div><div class="t">' + esc(ev.title) +
+            '</div>' + (ev.where ? '<div class="n">' + esc(ev.where) + '</div>' : '') + '</div></div>';
+        }).join('');
+      }).join('');
+  }
+
+  var hour = new Date().getHours();
+  if (data.page === 'home') el('greet').textContent = (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + ', team';
+  if (data.page === 'home') el('sub').textContent = data.today + (data.openCount != null ? ' · ' + data.openCount + ' open issue' + (data.openCount === 1 ? '' : 's') : '');
+
+  el('tiles').innerHTML = data.tiles.map(function (t) {
+    return '<a class="tile ' + esc(t.color) + '" href="' + esc(t.url) + '"><span class="icon" aria-hidden="true">' +
+      esc(t.icon) + '</span>' + esc(t.label) + '</a>';
+  }).join('');
+
+  var vehicles = (data.vehicles || []).filter(function (v) { return v.mileage || v.services.length });
+  if (vehicles.length) {
+    el('vanCard').hidden = false;
+    el('vehicles').innerHTML = vehicles.map(function (v) {
+      var parts = [];
+      if (v.mileage) parts.push('<span class="pill" style="padding-left:0">' + fmt(v.mileage) + ' miles</span>');
+      v.services.forEach(function (s) {
+        var cls = s.status === 'Overdue' ? 'Overdue' : s.status === 'Due soon' ? 'Due' : 'OK';
+        var txt = s.left == null ? s.name : s.left <= 0 ? s.name + ' overdue by ' + fmt(-s.left) + ' mi' : s.name + ' in ' + fmt(s.left) + ' mi';
+        parts.push('<span class="pill ' + cls + '">' + esc(txt) + '</span>');
+      });
+      return '<div class="vehicle"><h3>' + esc(v.name) + '</h3><div class="van">' + parts.join('') + '</div></div>';
+    }).join('');
+  }
+
+  // date · time · title · submitter, newest first.
+  var row = function (r, mark) {
+    var meta = [r.when, r.by && 'by ' + r.by].filter(Boolean).join(' · ');
+    var extra = [r.closed && 'handled ' + r.closed, r.note].filter(Boolean).join(' · ');
+    return '<div class="item">' + mark + '<div><div class="n">' + esc(meta) + '</div><div class="t">' + esc(r.title) +
+      '</div>' + (extra ? '<div class="n">' + esc(extra) + '</div>' : '') + '</div></div>';
+  };
+  if (data.openCount > data.open.length) el('openCount').textContent = 'newest ' + data.open.length + ' of ' + data.openCount;
+  el('open').innerHTML = data.open.length ? data.open.map(function (r) {
+    return row(r, '<span class="dot" aria-hidden="true">•</span>');
+  }).join('') : '<div class="empty">No open issues. Nice!</div>';
+  el('recent').innerHTML = data.recent.length ? data.recent.map(function (r) {
+    return row(r, '<span class="check" aria-hidden="true">✓</span>');
+  }).join('') : '<div class="empty">Nothing handled yet.</div>';
+
+  el('links').innerHTML = data.links.map(function (l) {
+    return '<a href="' + esc(l.url) + '">' + esc(l.label) + '<span aria-hidden="true">›</span></a>';
+  }).join('');
+  }
+
+  // BOOT (the GitHub Pages copy swaps this line; see scripts/build-dashboard-site.js)
+  // Loads the dashboard data from Google without anyone's Google sign-in.
+  (function () {
+    var FEED = 'https://script.google.com/macros/s/AKfycbwBED66CPc7nq88izmLWR3fc0xEcIVlJCgpNkKH-bjVWhGW177NfU2h8xggpDWfjPGy/exec?format=json';
+    var home = location.pathname;
+    var page = new URLSearchParams(location.search).get('page') || 'home';
+    el('logoIcon').src = 'logo-icon.png';
+    el('logoWord').src = 'logo-horizontal.png';
+    el('greet').textContent = 'Loading…';
+    fetch(FEED + '&page=' + encodeURIComponent(page), { credentials: 'omit' })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        data.home = home;
+        data.logos = { icon: 'logo-icon.png', horizontal: 'logo-horizontal.png' };
+        data.tiles.forEach(function (t) { if (t.page) t.url = home + '?page=' + t.page });
+        render(data);
+      })
+      .catch(function () {
+        el('greet').textContent = 'Couldn\'t load';
+        el('sub').textContent = 'Check your internet, then pull down to refresh. Still stuck? Ask Mike.';
+      });
+  })();
+</script>
+</body>
+</html>
