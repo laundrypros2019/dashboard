@@ -210,8 +210,10 @@
       !cal.days.length ? '<div class="empty">Nothing on the calendar through ' + esc(cal.through) + '.</div>' :
       cal.days.map(function (d) {
         return '<div class="day">' + esc(d.day) + '</div>' + d.events.map(function (ev) {
-          return '<div class="item"><span class="time">' + esc(ev.time) + '</span><div><div class="t">' + esc(ev.title) +
-            (ev.cal ? ' <span class="tag">' + esc(ev.cal) + '</span>' : '') +
+          // Each calendar's color from Google Calendar (only a #hex color is used).
+          var c = /^#[0-9a-f]{3,8}$/i.test(ev.color || '') ? ' style="color:' + ev.color + ';border-color:' + ev.color + '"' : '';
+          return '<div class="item"><span class="time">' + esc(ev.time) + '</span><div><div class="t"' + c + '>' + esc(ev.title) +
+            (ev.cal ? ' <span class="tag"' + c + '>' + esc(ev.cal) + '</span>' : '') +
             '</div>' + (ev.where ? '<div class="n">' + esc(ev.where) + '</div>' : '') + '</div></div>';
         }).join('');
       }).join('');
