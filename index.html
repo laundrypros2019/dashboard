@@ -130,6 +130,18 @@
     <div id="recent"></div>
   </section>
 
+  <!-- Phone messages have their own two lists (?page=calls / callsHandled). -->
+  <section class="card" id="callsOpenCard">
+    <h2 id="callsOpenHead"><a id="callsOpenLink" href="#">☎️ Open Phone Messages <span class="count" id="callsOpenCount"></span>
+      <span class="more">See all ›</span></a></h2>
+    <div id="callsOpen"></div>
+  </section>
+
+  <section class="card" id="callsRecentCard">
+    <h2 id="callsRecentHead"><a id="callsRecentLink" href="#">✅ Recently Handled Phone Messages <span class="more">See all ›</span></a></h2>
+    <div id="callsRecent"></div>
+  </section>
+
   </div>
 
   <section class="card links" id="linksPage" hidden>
@@ -162,7 +174,10 @@
   el('back').href = data.home;
   el('openLink').href = data.home + '?page=open';
   el('recentLink').href = data.home + '?page=handled';
-  var subPages = { report: '🚩 Report an Issue', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues', handled: '✅ Recently Handled' };
+  el('callsOpenLink').href = data.home + '?page=calls';
+  el('callsRecentLink').href = data.home + '?page=callsHandled';
+  var subPages = { report: '🚩 Report an Issue', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
+    handled: '✅ Recently Handled', calls: '☎️ Open Phone Messages', callsHandled: '✅ Recently Handled Phone Messages' };
   if (subPages[data.page]) {
     el('back').hidden = false;
     el('greet').textContent = subPages[data.page];
@@ -173,15 +188,21 @@
     el(data.page + 'Page').hidden = false;
   }
   if (data.page === 'report') el('sub').textContent = 'What kind of issue? Tap one.';
-  // The issue list pages keep only their own card, with the whole list.
-  var listPage = data.page === 'open' || data.page === 'handled';
+  // The list pages keep only their own card, with the whole list.
+  var calls = data.calls || { open: [], recent: [], openCount: 0 };
+  var listCards = { open: 'open', handled: 'recent', calls: 'callsOpen', callsHandled: 'callsRecent' };
+  var listPage = !!listCards[data.page];
   if (listPage) {
     el('tiles').hidden = true;
-    el((data.page === 'open' ? 'recent' : 'open') + 'Card').hidden = true;
-    el('openHead').hidden = true;
-    el('recentHead').hidden = true;
+    Object.keys(listCards).forEach(function (pg) {
+      var id = listCards[pg];
+      el(id + 'Head').hidden = true;
+      if (pg !== data.page) el(id + 'Card').hidden = true;
+    });
     if (data.page === 'open') el('sub').textContent = (data.openCount || 0) + ' open · tap Close when one is handled';
     if (data.page === 'handled') el('sub').textContent = 'The last ' + data.recent.length + ' closed issues';
+    if (data.page === 'calls') el('sub').textContent = (calls.openCount || 0) + ' open · tap Close when one is handled';
+    if (data.page === 'callsHandled') el('sub').textContent = 'The last ' + calls.recent.length + ' handled phone messages';
   }
   if (data.page === 'calendar') {
     var cal = data.calendar;
@@ -233,18 +254,32 @@
     return '<div class="item">' + mark + '<div class="grow"><div class="n">' + esc(meta) + '</div><div class="t">' + esc(r.title) +
       '</div>' + (extra ? '<div class="n">' + esc(extra) + '</div>' : '') + '</div>' + (tail || '') + '</div>';
   };
-  if (data.openCount > data.open.length) el('openCount').textContent = '· ' + data.openCount;
-  el('open').innerHTML = data.open.length ? data.open.map(function (r) {
-    var btn = r.id && data.api ? '<button class="closeBtn" type="button" data-id="' + esc(r.id) + '">Close</button>' : '';
-    return '<div class="openRow">' + row(r, '<span class="dot" aria-hidden="true">•</span>', btn) + '</div>';
-  }).join('') : '<div class="empty">No open issues. Nice!</div>';
-
-  // Close button: who handled it + an optional note, then mark it Done
-  // (doPost in StaffHub.js updates Notion and the Jotform table).
+  // Open lists (with Close buttons) and handled lists: issues, then phone messages.
+  var lists = [
+    { open: 'open', recent: 'recent', d: { open: data.open, recent: data.recent, openCount: data.openCount },
+      none: 'No open issues. Nice!', noneDone: 'Nothing handled yet.', example: 'Refilled the soap' },
+    { open: 'callsOpen', recent: 'callsRecent', d: calls,
+      none: 'No open phone messages.', noneDone: 'No phone messages handled yet.', example: 'Called them back' },
+  ];
   var staffOptions = '<option value="">Pick your name</option>' + (data.staff || []).map(function (n) {
     return '<option>' + esc(n) + '</option>';
   }).join('');
-  el('open').onclick = function (ev) {
+  lists.forEach(function (L) {
+    var d = L.d;
+    if (d.openCount > d.open.length) el(L.open + 'Count').textContent = '· ' + d.openCount;
+    el(L.open).innerHTML = d.open.length ? d.open.map(function (r) {
+      var btn = r.id && data.api ? '<button class="closeBtn" type="button" data-id="' + esc(r.id) + '">Close</button>' : '';
+      return '<div class="openRow">' + row(r, '<span class="dot" aria-hidden="true">•</span>', btn) + '</div>';
+    }).join('') : '<div class="empty">' + L.none + '</div>';
+    el(L.open).onclick = function (ev) { closeClick(ev, L.example) };
+    el(L.recent).innerHTML = d.recent.length ? d.recent.map(function (r) {
+      return row(r, '<span class="check" aria-hidden="true">✓</span>');
+    }).join('') : '<div class="empty">' + L.noneDone + '</div>';
+  });
+
+  // Close button: who handled it + an optional note, then mark it Done
+  // (doPost in StaffHub.js updates Notion and the Jotform table).
+  function closeClick(ev, example) {
     var t = ev.target;
     var openRow = t.closest && t.closest('.openRow');
     if (!openRow) return;
@@ -253,7 +288,7 @@
       if (panel) return panel.remove();
       openRow.insertAdjacentHTML('beforeend', '<div class="closer">' +
         '<label>Who handled it?<select class="cStaff">' + staffOptions + '</select></label>' +
-        '<label>How was it handled? (optional)<input class="cNote" maxlength="500" placeholder="Refilled the soap"></label>' +
+        '<label>How was it handled? (optional)<input class="cNote" maxlength="500" placeholder="' + esc(example) + '"></label>' +
         '<div class="cBtns"><button class="cSave" type="button">Mark handled</button>' +
         '<button class="cCancel" type="button">Cancel</button></div><div class="cMsg"></div></div>');
       return;
@@ -279,10 +314,7 @@
       t.textContent = 'Mark handled';
       msg.textContent = (err && err.message && err.message.indexOf('Failed to fetch') < 0 ? err.message : 'Couldn\'t save. Check your internet and try again.');
     });
-  };
-  el('recent').innerHTML = data.recent.length ? data.recent.map(function (r) {
-    return row(r, '<span class="check" aria-hidden="true">✓</span>');
-  }).join('') : '<div class="empty">Nothing handled yet.</div>';
+  }
 
   el('links').innerHTML = data.links.map(function (l) {
     return '<a href="' + esc(l.url) + '">' + esc(l.label) + '<span aria-hidden="true">›</span></a>';
