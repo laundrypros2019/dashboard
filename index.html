@@ -137,6 +137,8 @@
 
   <section class="card cal" id="calendarPage" hidden></section>
 
+  <nav class="tiles" id="reportPage" aria-label="What kind of issue?" hidden></nav>
+
   <footer>F&amp;F Dashboard · Fluff &amp; Fold Modesto · questions? Ask Mike</footer>
 </main>
 
@@ -159,16 +161,17 @@
   el('back').href = data.home;
   el('openLink').href = data.home + '?page=open';
   el('recentLink').href = data.home + '?page=handled';
-  var subPages = { links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues', handled: '✅ Recently Handled' };
+  var subPages = { report: '🚩 Report an Issue', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues', handled: '✅ Recently Handled' };
   if (subPages[data.page]) {
     el('back').hidden = false;
     el('greet').textContent = subPages[data.page];
     el('sub').textContent = 'Tap the logo to go home';
   }
-  if (data.page === 'links' || data.page === 'calendar') {
+  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report') {
     el('homePage').hidden = true;
     el(data.page + 'Page').hidden = false;
   }
+  if (data.page === 'report') el('sub').textContent = 'What kind of issue? Tap one.';
   // The issue list pages keep only their own card, with the whole list.
   var listPage = data.page === 'open' || data.page === 'handled';
   if (listPage) {
@@ -195,6 +198,11 @@
   var hour = new Date().getHours();
   if (data.page === 'home') el('greet').textContent = (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + ', team';
   if (data.page === 'home') el('sub').textContent = data.today + (data.openCount != null ? ' · ' + data.openCount + ' open issue' + (data.openCount === 1 ? '' : 's') : '');
+
+  el('reportPage').innerHTML = (data.reportTiles || []).map(function (t) {
+    return '<a class="tile" href="' + esc(t.url) + '"><span class="icon" aria-hidden="true">' +
+      esc(t.icon) + '</span>' + esc(t.label) + '</a>';
+  }).join('');
 
   el('tiles').innerHTML = data.tiles.map(function (t) {
     return '<a class="tile ' + esc(t.color) + '" href="' + esc(t.url) + '"><span class="icon" aria-hidden="true">' +
