@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<!-- The one-time "Connect Shoeboxed" page for Mike (published next to the
+     dashboard as shoeboxed.html by scripts/build-dashboard-site.js). Tapping
+     Connect opens Shoeboxed's Allow page; Shoeboxed sends Mike back here with a
+     code, which the web app trades for its sign-in (apps-script/Shoeboxed.js). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Connect Shoeboxed</title>
+<style>
+  :root { --bg: #f4f4f4; --card: #fff; --text: #111; --muted: #6b6a66; --red: #791f1f; --ok: #0f6e56; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111; --card: #1d1d1d; --text: #f4f4f4; --muted: #a9a79f; --red: #f7c1c1; --ok: #5dcaa5; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .bar { background: #000; color: #fff; padding: 14px 16px; font-weight: 700; }
+  .bar a { color: #fff; text-decoration: none; }
+  main { max-width: 520px; margin: 0 auto; padding: 24px 16px; }
+  .card { background: var(--card); border-radius: 16px; padding: 20px; }
+  h1 { font-size: 21px; margin: 0 0 8px; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  button { font: 700 17px inherit; font-family: inherit; padding: 14px 24px; border-radius: 12px; border: 0; background: var(--text); color: var(--card); }
+  #msg.ok { color: var(--ok); font-weight: 700; }
+  #msg.err { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="bar"><a href="./">‹ F&amp;F Dashboard</a></div>
+<main>
+  <div class="card">
+    <h1>Connect Shoeboxed</h1>
+    <p>Receipts from the dashboard's Upload Receipt button go to your Shoeboxed account. Connect it once here.</p>
+    <button id="go" type="button">Connect Shoeboxed</button>
+    <p id="msg"></p>
+  </div>
+</main>
+<script>
+  var API = 'https://script.google.com/macros/s/AKfycbwBED66CPc7nq88izmLWR3fc0xEcIVlJCgpNkKH-bjVWhGW177NfU2h8xggpDWfjPGy/exec';
+  var msg = document.getElementById('msg');
+  var go = document.getElementById('go');
+  var post = function (body) {
+    return fetch(API, { method: 'POST', credentials: 'omit', body: JSON.stringify(body) })
+      .then(function (r) { return r.json() })
+      .then(function (res) { if (!res.ok) throw new Error(res.error || 'Something went wrong.'); return res });
+  };
+  var show = function (text, kind) { msg.textContent = text; msg.className = kind || '' };
+
+  var q = new URLSearchParams(location.search);
+  if (q.get('code')) {
+    go.hidden = true;
+    show('Connecting…');
+    post({ action: 'shoeboxed-connect', code: q.get('code'), state: q.get('state') })
+      .then(function () {
+        history.replaceState(null, '', location.pathname);
+        show('✓ Connected. Receipts will now go to your Shoeboxed account within about 5 minutes.', 'ok');
+      })
+      .catch(function (err) { go.hidden = false; show(err.message, 'err') });
+  } else if (q.get('error')) {
+    show('Shoeboxed said: ' + q.get('error') + '. Tap Connect to try again.', 'err');
+  }
+
+  go.onclick = function () {
+    go.disabled = true;
+    show('Opening Shoeboxed…');
+    post({ action: 'shoeboxed-link' })
+      .then(function (res) { location.href = res.url })
+      .catch(function (err) { go.disabled = false; show(err.message, 'err') });
+  };
+</script>
+</body>
+</html>
