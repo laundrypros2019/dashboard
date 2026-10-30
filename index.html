@@ -47,6 +47,7 @@
     background: var(--card); color: var(--text); border: 1.5px solid var(--text); }
   .tile:active { transform: scale(0.97); background: var(--text); color: var(--card); }
   .tile .icon { font-size: 30px; line-height: 1; }
+  .tile .icon svg { display: block; }
   .card { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-top: 16px; border: 1px solid var(--line); }
   .card h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
   .card h2 a { color: var(--text); text-decoration: none; }
@@ -199,9 +200,10 @@
   if (data.page === 'home') el('greet').textContent = (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + ', team';
   if (data.page === 'home') el('sub').textContent = data.today + (data.openCount != null ? ' · ' + data.openCount + ' open issue' + (data.openCount === 1 ? '' : 's') : '');
 
+  // iconSvg is a drawing from StaffHub.js (our own code, so not escaped).
   el('reportPage').innerHTML = (data.reportTiles || []).map(function (t) {
     return '<a class="tile" href="' + esc(t.url) + '"><span class="icon" aria-hidden="true">' +
-      esc(t.icon) + '</span>' + esc(t.label) + '</a>';
+      (t.iconSvg || esc(t.icon)) + '</span>' + esc(t.label) + '</a>';
   }).join('');
 
   el('tiles').innerHTML = data.tiles.map(function (t) {
