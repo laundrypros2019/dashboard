@@ -49,6 +49,8 @@
   .tile .icon { font-size: 30px; line-height: 1; }
   .card { background: var(--card); border-radius: 16px; padding: 14px 16px; margin-top: 16px; border: 1px solid var(--line); }
   .card h2 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+  .card h2 a { color: var(--text); text-decoration: none; }
+  .card h2 .more { float: right; font-size: 13px; font-weight: 600; color: var(--muted); }
   .vehicle + .vehicle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
   .vehicle h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; color: var(--muted); }
   .van { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -114,13 +116,16 @@
     <div id="vehicles"></div>
   </section>
 
-  <section class="card">
-    <h2>🚩 Open Issues <span class="count" id="openCount"></span></h2>
+  <!-- Home shows 3 of each; the titles open ?page=open / ?page=handled,
+       which reuse these cards with the full list. -->
+  <section class="card" id="openCard">
+    <h2 id="openHead"><a id="openLink" href="#">🚩 Open Issues <span class="count" id="openCount"></span>
+      <span class="more">See all ›</span></a></h2>
     <div id="open"></div>
   </section>
 
-  <section class="card">
-    <h2>✅ Recently Handled</h2>
+  <section class="card" id="recentCard">
+    <h2 id="recentHead"><a id="recentLink" href="#">✅ Recently Handled <span class="more">See all ›</span></a></h2>
     <div id="recent"></div>
   </section>
 
@@ -152,13 +157,27 @@
   el('logo').href = data.home;
   el('logoLink').href = data.home;
   el('back').href = data.home;
-  var subPages = { links: '🔗 Links', calendar: '📅 Company Calendar' };
+  el('openLink').href = data.home + '?page=open';
+  el('recentLink').href = data.home + '?page=handled';
+  var subPages = { links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues', handled: '✅ Recently Handled' };
   if (subPages[data.page]) {
-    el('homePage').hidden = true;
-    el(data.page + 'Page').hidden = false;
     el('back').hidden = false;
     el('greet').textContent = subPages[data.page];
     el('sub').textContent = 'Tap the logo to go home';
+  }
+  if (data.page === 'links' || data.page === 'calendar') {
+    el('homePage').hidden = true;
+    el(data.page + 'Page').hidden = false;
+  }
+  // The issue list pages keep only their own card, with the whole list.
+  var listPage = data.page === 'open' || data.page === 'handled';
+  if (listPage) {
+    el('tiles').hidden = true;
+    el((data.page === 'open' ? 'recent' : 'open') + 'Card').hidden = true;
+    el('openHead').hidden = true;
+    el('recentHead').hidden = true;
+    if (data.page === 'open') el('sub').textContent = (data.openCount || 0) + ' open · tap Close when one is handled';
+    if (data.page === 'handled') el('sub').textContent = 'The last ' + data.recent.length + ' closed issues';
   }
   if (data.page === 'calendar') {
     var cal = data.calendar;
@@ -183,7 +202,7 @@
   }).join('');
 
   var vehicles = (data.vehicles || []).filter(function (v) { return v.mileage || v.services.length });
-  if (vehicles.length) {
+  if (vehicles.length && !listPage) {
     el('vanCard').hidden = false;
     el('vehicles').innerHTML = vehicles.map(function (v) {
       var parts = [];
@@ -204,7 +223,7 @@
     return '<div class="item">' + mark + '<div class="grow"><div class="n">' + esc(meta) + '</div><div class="t">' + esc(r.title) +
       '</div>' + (extra ? '<div class="n">' + esc(extra) + '</div>' : '') + '</div>' + (tail || '') + '</div>';
   };
-  if (data.openCount > data.open.length) el('openCount').textContent = 'newest ' + data.open.length + ' of ' + data.openCount;
+  if (data.openCount > data.open.length) el('openCount').textContent = '· ' + data.openCount;
   el('open').innerHTML = data.open.length ? data.open.map(function (r) {
     var btn = r.id && data.api ? '<button class="closeBtn" type="button" data-id="' + esc(r.id) + '">Close</button>' : '';
     return '<div class="openRow">' + row(r, '<span class="dot" aria-hidden="true">•</span>', btn) + '</div>';
