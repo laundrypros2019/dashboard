@@ -102,8 +102,21 @@
   .person { padding: 10px 0; border-top: 1px solid var(--line); }
   .person:first-of-type { border-top: 0; }
   .person .t { font-size: 15px; font-weight: 600; }
+  .person .role { font-weight: 400; color: var(--muted); }
   .person .reach { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 3px; font-size: 14px; }
   .person .reach a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+  .mSearch { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 8px 0 6px; margin-top: 8px; }
+  .mSearch input { display: block; width: 100%; font: 16px Arimo, sans-serif; padding: 11px 12px; border-radius: 12px;
+    border: 1.5px solid var(--text); background: var(--card); color: var(--text); }
+  .mSearch .mBar { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .mSearch .mBar span { flex: 1; }
+  .mSearch .mBar button { font: 600 13px Arimo, sans-serif; padding: 6px 12px; border-radius: 999px;
+    background: var(--card); color: var(--text); border: 1.5px solid var(--text); }
+  .mHits { margin-top: 4px; }
+  .mHit { display: block; width: 100%; text-align: left; font: 14px/1.4 Arimo, sans-serif; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+  .mHit b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .mHit mark { background: #ffe066; color: #111; border-radius: 3px; }
   .manual { padding: 0; overflow: hidden; }
   .manual iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 22px; }
@@ -177,6 +190,16 @@
 
   <section class="card" id="staffPage" hidden><div id="staffList"></div></section>
 
+  <!-- Search the manual: stays at the top while scrolling. -->
+  <div class="mSearch" id="manualSearch" hidden>
+    <input id="manualQ" type="search" placeholder="Search the manual (like: piercings)" autocomplete="off" enterkeyhint="search">
+    <div class="mBar" id="manualBar" hidden><span id="manualCount"></span>
+      <button type="button" id="manualPrev" aria-label="Previous">‹</button>
+      <button type="button" id="manualNext" aria-label="Next">›</button>
+      <button type="button" id="manualList">List</button></div>
+  </div>
+  <div class="mHits" id="manualHits"></div>
+
   <!-- The manual's Google Doc, shown with scripts off (sandbox) so it can't run anything. -->
   <section class="card manual" id="manualPage" hidden>
     <iframe id="manualFrame" title="Employee Manual" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
@@ -242,7 +265,7 @@
         var reach = [];
         if (s.mobile) reach.push('<a href="tel:' + esc(s.mobile.replace(/[^\d+]/g, '')) + '">📞 ' + esc(s.mobile) + '</a>');
         if (s.email) reach.push('<a href="mailto:' + esc(s.email) + '">✉️ ' + esc(s.email) + '</a>');
-        return '<div class="person"><div class="t">' + esc(s.name) + (s.role ? ' <span class="count">· ' + esc(s.role) + '</span>' : '') +
+        return '<div class="person"><div class="t">' + esc(s.name) + (s.role ? ' <span class="role">- ' + esc(s.role) + '</span>' : '') +
           '</div><div class="reach">' + reach.join('') + '</div></div>';
       }).join('');
     if (people) el('sub').textContent = people.length + ' people · tap a number to call';
@@ -256,9 +279,22 @@
       el('sub').textContent = 'Always the latest version · tap the logo to go home';
       // Fit the doc to a phone; links open in a new tab.
       var fit = '<base target="_blank"><style>body{max-width:none!important;margin:0!important;padding:16px!important}' +
-        'img{max-width:100%!important;height:auto!important}table{max-width:100%!important}</style>';
-      frame.onload = function () {
+        'img{max-width:100%!important;height:auto!important}table{max-width:100%!important}' +
+        'mark{background:#ffe066;color:inherit;border-radius:2px}mark.now{background:#ff9f1c}' +
+        '.ffToc{border:1px solid #ddd;border-radius:12px;padding:12px 14px;margin:0 0 20px;font-family:Arimo,Arial,sans-serif}' +
+        '.ffToc summary{font-weight:700;font-size:16px;cursor:pointer}' +
+        '.ffToc a{display:block;padding:8px 0;border-top:1px solid #eee;color:#111;text-decoration:none;font-size:15px;line-height:1.3}' +
+        '.ffToc summary+a{margin-top:10px}.ffToc a.l1{font-weight:700}.ffToc a.l2{padding-left:14px}' +
+        '.ffToc a.l3{padding-left:28px;font-size:14px;color:#555}</style>';
+      var fitHeight = function () {
         try { frame.style.height = (frame.contentDocument.documentElement.scrollHeight + 20) + 'px' } catch (e) {}
+      };
+      frame.onload = function () {
+        try {
+          tidyManual(frame, fitHeight);
+          manualSearch(frame);
+        } catch (e) {}
+        fitHeight();
       };
       frame.srcdoc = /<head[^>]*>/i.test(data.manual) ? data.manual.replace(/<head[^>]*>/i, function (h) { return h + fit }) : fit + data.manual;
     }
@@ -380,6 +416,173 @@
   el('links').innerHTML = data.links.map(function (l) {
     return '<a href="' + esc(l.url) + '">' + esc(l.label) + '<span aria-hidden="true">›</span></a>';
   }).join('');
+  }
+
+  // The doc's table of contents was built for paper (page numbers, deep
+  // indents), which looks jumbled on a phone. This swaps it for a folded
+  // "Contents" list: tap to open, tap a line to jump there (Mike, 2026-11-04).
+  function tidyManual(frame, fitHeight) {
+    var doc = frame.contentDocument;
+    var toc = Array.prototype.filter.call(doc.body.querySelectorAll('p'), function (p) { return p.querySelector('a[href^="#"]') });
+    if (toc.length) {
+      var box = doc.createElement('details');
+      box.className = 'ffToc';
+      box.innerHTML = '<summary>📑 Contents (tap to open)</summary>';
+      toc.forEach(function (p) {
+        var link = p.querySelector('a[href^="#"]');
+        var id = link.getAttribute('href').slice(1);
+        var text = link.textContent.replace(/\s+/g, ' ').replace(/\s*\d+$/, '').trim();
+        var target = doc.getElementById(id);
+        if (text && !/^\d+$/.test(text)) {
+          var a = doc.createElement('a');
+          a.href = '#' + id;
+          a.textContent = text;
+          a.className = target && target.tagName === 'H1' ? 'l1' : target && target.tagName === 'H2' ? 'l2' : 'l3';
+          box.appendChild(a);
+        }
+      });
+      toc[0].parentNode.insertBefore(box, toc[0]);
+      toc.forEach(function (p) { p.remove() });
+      box.addEventListener('toggle', fitHeight);
+    }
+    // Links inside the manual jump within the page (not a new tab).
+    doc.addEventListener('click', function (ev) {
+      var a = ev.target.closest && ev.target.closest('a[href^="#"]');
+      if (!a) return;
+      ev.preventDefault();
+      var target = doc.getElementById(a.getAttribute('href').slice(1));
+      if (!target) return;
+      var top = frame.getBoundingClientRect().top + window.scrollY + target.getBoundingClientRect().top;
+      window.scrollTo({ top: Math.max(0, top - el('manualSearch').offsetHeight - 20), behavior: 'smooth' });
+    });
+  }
+
+  // Search the manual (Mike, 2026-11-04). A small spelling slip still finds
+  // the word ("peircings" finds "piercings"). Each place it's found is listed
+  // with its section; tapping one scrolls the manual there. The table of
+  // contents is skipped, so results are the real sections.
+  var STOP = ['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'what', 'can', 'i', 'my', 'do', 'about'];
+  function manualSearch(frame) {
+    var doc = frame.contentDocument;
+    var norm = function (w) { return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') };
+    var words = function (t) { return t.match(/[A-Za-z0-9\u00C0-\u024F']+/g) || [] };
+    // Letters added, dropped, changed or swapped (so "ei" for "ie" counts as 1).
+    var dist = function (a, b) {
+      var d = [], i, j;
+      for (i = 0; i <= a.length; i++) d[i] = [i];
+      for (j = 0; j <= b.length; j++) d[0][j] = j;
+      for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+      return d[a.length][b.length];
+    };
+    // How many slips a word can have: 1, or 2 for long words (so "pricing" doesn't match "peircings").
+    var slip = function (q) { return q.length >= 10 ? 2 : q.length >= 4 ? 1 : 0 };
+    var matches = function (word, q) {
+      var w = norm(word);
+      if (w === q || (q.length >= 3 && w.indexOf(q) === 0)) return true;
+      var max = slip(q);
+      if (!max) return false;
+      if (Math.abs(w.length - q.length) <= max && dist(w, q) <= max) return true;
+      var sw = w.replace(/s$/, ''), sq = q.replace(/s$/, '');
+      if (Math.abs(sw.length - sq.length) <= max && dist(sw, sq) <= max) return true;
+      return q.length >= 5 && w.length > q.length && dist(w.slice(0, q.length), q) <= 1; // a word still being typed
+    };
+
+    // Each paragraph and its section heading, in reading order (no table of contents).
+    var blocks = [], section = '';
+    Array.prototype.forEach.call(doc.body.querySelectorAll('h1, h2, h3, h4, p, li'), function (b) {
+      var text = b.textContent.replace(/\s+/g, ' ').trim();
+      if (!text) return;
+      if (/^H[1-4]$/.test(b.tagName)) section = text;
+      if (b.querySelector('a[href^="#"]')) return;
+      blocks.push({ el: b, text: text, section: section });
+    });
+
+    var marks = [], at = -1, timer = null;
+    var clear = function () {
+      marks.forEach(function (m) {
+        var parent = m.parentNode;
+        if (!parent) return;
+        parent.replaceChild(doc.createTextNode(m.textContent), m);
+        parent.normalize();
+      });
+      marks = [];
+      at = -1;
+    };
+    // Wraps the found words of one paragraph in <mark>; returns the first one.
+    var markWords = function (b, found) {
+      var first = null, walker = doc.createTreeWalker(b, NodeFilter.SHOW_TEXT), nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(function (node) {
+        var parts = node.nodeValue.split(/([A-Za-z0-9\u00C0-\u024F']+)/);
+        if (!parts.some(function (p) { return found[p] })) return;
+        var frag = doc.createDocumentFragment();
+        parts.forEach(function (p) {
+          if (found[p]) {
+            var m = doc.createElement('mark');
+            m.textContent = p;
+            frag.appendChild(m);
+            if (!first) first = m;
+          } else if (p) frag.appendChild(doc.createTextNode(p));
+        });
+        node.parentNode.replaceChild(frag, node);
+      });
+      return first;
+    };
+    var go = function (i) {
+      if (!marks.length) return;
+      at = (i + marks.length) % marks.length;
+      marks.forEach(function (m, k) { m.className = k === at ? 'now' : '' });
+      var top = frame.getBoundingClientRect().top + window.scrollY + marks[at].getBoundingClientRect().top;
+      window.scrollTo({ top: Math.max(0, top - el('manualSearch').offsetHeight - 40), behavior: 'smooth' });
+      el('manualCount').textContent = 'Place ' + (at + 1) + ' of ' + marks.length;
+    };
+    var run = function () {
+      clear();
+      var raw = el('manualQ').value.trim();
+      var terms = words(raw).map(norm);
+      var kept = terms.filter(function (t) { return STOP.indexOf(t) < 0 });
+      if (kept.length) terms = kept;
+      el('manualBar').hidden = !terms.length;
+      if (!terms.length) { el('manualHits').innerHTML = ''; return }
+      var hits = [];
+      blocks.forEach(function (b) {
+        var found = {}, all = terms.every(function (q) {
+          var any = false;
+          words(b.text).forEach(function (w) { if (matches(w, q)) { found[w] = true; any = true } });
+          return any;
+        });
+        if (!all) return;
+        var mark = markWords(b.el, found);
+        if (!mark) return;
+        marks.push(mark);
+        hits.push({ b: b, found: found });
+      });
+      el('manualCount').textContent = hits.length ? hits.length + (hits.length === 1 ? ' place' : ' places') + ' found · tap one' :
+        'Nothing found for "' + raw + '". Try another word.';
+      el('manualHits').innerHTML = hits.slice(0, 40).map(function (h, i) {
+        var t = h.b.text, first = t.length;
+        Object.keys(h.found).forEach(function (w) { var k = t.indexOf(w); if (k >= 0 && k < first) first = k });
+        var start = Math.max(0, first - 50), snip = (start ? '…' : '') + t.slice(start, start + 150) + (start + 150 < t.length ? '…' : '');
+        var html = esc(snip);
+        Object.keys(h.found).forEach(function (w) {
+          html = html.replace(new RegExp('(^|[^A-Za-z0-9])(' + esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[^A-Za-z0-9]|$)', 'g'), '$1<mark>$2</mark>');
+        });
+        return '<button type="button" class="mHit" data-i="' + i + '"><b>' + esc(h.b.section || 'Employee Manual') + '</b>' + html + '</button>';
+      }).join('');
+    };
+    el('manualSearch').hidden = false;
+    el('manualQ').oninput = function () { clearTimeout(timer); timer = setTimeout(run, 300) };
+    el('manualQ').onkeydown = function (ev) { if (ev.key === 'Enter') { clearTimeout(timer); run(); el('manualQ').blur() } };
+    el('manualHits').onclick = function (ev) {
+      var b = ev.target.closest && ev.target.closest('.mHit');
+      if (b) go(+b.getAttribute('data-i'));
+    };
+    el('manualPrev').onclick = function () { go(at - 1) };
+    el('manualNext').onclick = function () { go(at + 1) };
+    el('manualList').onclick = function () { window.scrollTo({ top: el('manualHits').offsetTop - el('manualSearch').offsetHeight - 20, behavior: 'smooth' }) };
   }
 
   // The staff code: asked once, then kept on this phone. Every request sends
