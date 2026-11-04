@@ -92,6 +92,18 @@
   .cal .day:first-child { margin-top: 0; }
   .cal .tag { font-size: 11px; font-weight: 600; border: 1px solid var(--text); border-radius: 999px; padding: 1px 7px; margin-left: 4px; white-space: nowrap; }
   .cal .time { font-size: 13px; color: var(--muted); width: 128px; flex: none; }
+  .lock label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .lock input { display: block; width: 100%; margin-top: 6px; font: 22px Arimo, sans-serif; letter-spacing: 0.3em; text-align: center;
+    padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .lock button { width: 100%; font: 700 16px Arimo, sans-serif; padding: 12px 16px; border-radius: 10px;
+    border: 1.5px solid var(--text); background: var(--text); color: var(--card); }
+  .lock .lMsg { font-size: 13px; color: var(--red); margin-top: 10px; }
+  .lock .lMsg:empty { display: none; }
+  .person { padding: 10px 0; border-top: 1px solid var(--line); }
+  .person:first-of-type { border-top: 0; }
+  .person .t { font-size: 15px; font-weight: 600; }
+  .person .reach { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 3px; font-size: 14px; }
+  .person .reach a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
   footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 22px; }
 </style>
 </head>
@@ -109,7 +121,16 @@
     <div class="sub" id="sub"></div>
   </div>
 
-  <div id="homePage">
+  <!-- The staff code (HUB_CODE in StaffHub.js): asked once, then remembered on this phone. -->
+  <section class="card lock" id="lockPage" hidden>
+    <form id="lockForm">
+      <label>Staff code<input id="lockCode" type="password" inputmode="numeric" autocomplete="off" maxlength="12"></label>
+      <button type="submit">Open dashboard</button>
+      <div class="lMsg" id="lockMsg"></div>
+    </form>
+  </section>
+
+  <div id="homePage" hidden>
   <nav class="tiles" id="tiles" aria-label="What do you need to do?"></nav>
 
   <section class="card" id="vanCard" hidden>
@@ -152,6 +173,8 @@
 
   <nav class="tiles" id="reportPage" aria-label="What kind of issue?" hidden></nav>
 
+  <section class="card" id="staffPage" hidden><div id="staffList"></div></section>
+
   <footer>F&amp;F Dashboard · Fluff &amp; Fold Modesto · questions? Ask Mike</footer>
 </main>
 
@@ -176,14 +199,15 @@
   el('recentLink').href = data.home + '?page=handled';
   el('callsOpenLink').href = data.home + '?page=calls';
   el('callsRecentLink').href = data.home + '?page=callsHandled';
-  var subPages = { report: '🚩 Report an Issue', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
+  el('homePage').hidden = false;
+  var subPages = { report: '🚩 Report an Issue', staff: '📇 Employee Contacts', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
     handled: '✅ Recently Handled', calls: '☎️ Open Phone Messages', callsHandled: '✅ Recently Handled Phone Messages' };
   if (subPages[data.page]) {
     el('back').hidden = false;
     el('greet').textContent = subPages[data.page];
     el('sub').textContent = 'Tap the logo to go home';
   }
-  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report') {
+  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report' || data.page === 'staff') {
     el('homePage').hidden = true;
     el(data.page + 'Page').hidden = false;
   }
@@ -203,6 +227,18 @@
     if (data.page === 'handled') el('sub').textContent = 'The last ' + data.recent.length + ' closed issues';
     if (data.page === 'calls') el('sub').textContent = (calls.openCount || 0) + ' open · tap Close when one is handled';
     if (data.page === 'callsHandled') el('sub').textContent = 'The last ' + calls.recent.length + ' handled phone messages';
+  }
+  if (data.page === 'staff') {
+    var people = data.staffList;
+    el('staffList').innerHTML = !people ? '<div class="empty">The list couldn\'t load. Try again in a minute, or ask Mike.</div>' :
+      people.map(function (s) {
+        var reach = [];
+        if (s.mobile) reach.push('<a href="tel:' + esc(s.mobile.replace(/[^\d+]/g, '')) + '">📞 ' + esc(s.mobile) + '</a>');
+        if (s.email) reach.push('<a href="mailto:' + esc(s.email) + '">✉️ ' + esc(s.email) + '</a>');
+        return '<div class="person"><div class="t">' + esc(s.name) + (s.role ? ' <span class="count">· ' + esc(s.role) + '</span>' : '') +
+          '</div><div class="reach">' + reach.join('') + '</div></div>';
+      }).join('');
+    if (people) el('sub').textContent = people.length + ' people · tap a number to call';
   }
   if (data.page === 'calendar') {
     var cal = data.calendar;
@@ -306,7 +342,7 @@
       method: 'POST',
       credentials: 'omit',
       body: JSON.stringify({ action: 'close', id: openRow.querySelector('.closeBtn').getAttribute('data-id'),
-        staff: staff, note: panel.querySelector('.cNote').value }),
+        staff: staff, note: panel.querySelector('.cNote').value, code: staffCode }),
     }).then(function (r) { return r.json() }).then(function (res) {
       if (!res.ok) throw new Error(res.error || 'Something went wrong.');
       openRow.innerHTML = '<div class="item"><span class="check" aria-hidden="true">✓</span><div class="grow"><div class="t">' +
@@ -323,28 +359,64 @@
   }).join('');
   }
 
-  // BOOT (the GitHub Pages copy swaps this line; see scripts/build-dashboard-site.js)
-  // Loads the dashboard data from Google without anyone's Google sign-in.
-  (function () {
-    var FEED = 'https://script.google.com/macros/s/AKfycbwBED66CPc7nq88izmLWR3fc0xEcIVlJCgpNkKH-bjVWhGW177NfU2h8xggpDWfjPGy/exec?format=json';
-    var home = location.pathname;
-    var page = new URLSearchParams(location.search).get('page') || 'home';
-    el('logoIcon').src = 'logo-icon.png';
-    el('logoWord').src = 'logo-horizontal.png';
+  // The staff code: asked once, then kept on this phone. Every request sends
+  // it, and the server (doPost in StaffHub.js) sends nothing back without it.
+  var CODE_KEY = 'ffDashboardCode';
+  var staffCode = '';
+  var savedCode = function () { try { return localStorage.getItem(CODE_KEY) || '' } catch (e) { return '' } };
+  var keepCode = function (c) { try { c ? localStorage.setItem(CODE_KEY, c) : localStorage.removeItem(CODE_KEY) } catch (e) {} };
+
+  // shell: { page, home, api, logos }. Loads the page's data with the code, then renders it.
+  function start(shell, code) {
+    el('logoIcon').src = shell.logos.icon;
+    el('logoWord').src = shell.logos.horizontal;
+    el('logo').href = shell.home;
+    el('logoLink').href = shell.home;
+    code = code || savedCode();
+    if (!code) return showLock(shell, '');
+    el('lockPage').hidden = true;
     el('greet').textContent = 'Loading…';
-    fetch(FEED + '&page=' + encodeURIComponent(page), { credentials: 'omit' })
+    el('sub').textContent = '';
+    fetch(shell.api, { method: 'POST', credentials: 'omit', body: JSON.stringify({ action: 'data', page: shell.page, code: code }) })
       .then(function (r) { return r.json() })
       .then(function (data) {
-        data.home = home;
-        data.logos = { icon: 'logo-icon.png', horizontal: 'logo-horizontal.png' };
-        data.tiles.forEach(function (t) { if (t.page) t.url = home + '?page=' + t.page });
+        if (data.locked) { keepCode(''); return showLock(shell, 'That code didn\'t work. Try again, or ask Mike.') }
+        keepCode(code);
+        staffCode = code;
+        data.home = shell.home;
+        data.api = shell.api;
+        data.logos = shell.logos;
+        data.tiles.forEach(function (t) { if (t.page) t.url = shell.home + '?page=' + t.page });
         render(data);
       })
       .catch(function () {
         el('greet').textContent = 'Couldn\'t load';
         el('sub').textContent = 'Check your internet, then pull down to refresh. Still stuck? Ask Mike.';
       });
-  })();
+  }
+
+  function showLock(shell, msg) {
+    el('homePage').hidden = true;
+    el('lockPage').hidden = false;
+    el('greet').textContent = 'F&F Dashboard';
+    el('sub').textContent = 'Type the staff code to open it.';
+    el('lockMsg').textContent = msg;
+    el('lockCode').value = '';
+    el('lockForm').onsubmit = function (ev) {
+      ev.preventDefault();
+      var c = el('lockCode').value.trim();
+      if (c) start(shell, c);
+    };
+    el('lockCode').focus();
+  }
+
+  // BOOT (the GitHub Pages copy swaps this line; see scripts/build-dashboard-site.js)
+  start({
+    page: new URLSearchParams(location.search).get('page') || 'home',
+    home: location.pathname,
+    api: 'https://script.google.com/macros/s/AKfycbwBED66CPc7nq88izmLWR3fc0xEcIVlJCgpNkKH-bjVWhGW177NfU2h8xggpDWfjPGy/exec',
+    logos: { icon: 'logo-icon.png', horizontal: 'logo-horizontal.png' },
+  });
 </script>
 </body>
 </html>
