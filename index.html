@@ -259,6 +259,7 @@
   }
   if (data.page === 'sops') { el('sub').textContent = 'Search them all, or tap one to read it'; sopSearch(data) }
   pendingFind = sopDoc && data.find && data.find.q ? data.find : null;
+  if (sopDoc) manualName = data.docTitle || 'SOP';
   if (sopDoc) el('manualQ').placeholder = 'Search this SOP';
   if (data.page === 'report') el('sub').textContent = 'What kind of issue? Tap one.';
   // The list pages keep only their own card, with the whole list.
@@ -512,6 +513,7 @@
   };
 
   var pendingFind = null; // { q, hit } from an all-SOPs search result
+  var manualName = 'Employee Manual'; // the doc's name on search results
 
   // The SOPs page search: every SOP's paragraphs (data.sopIndex), same word
   // matching as the manual. Tapping a result opens that SOP at that paragraph.
@@ -601,12 +603,12 @@
       return first;
     };
     var lastHits = [];
-    var go = function (i) {
+    var go = function (i, instant) {
       if (!marks.length) return;
       at = (i + marks.length) % marks.length;
       marks.forEach(function (m, k) { m.className = k === at ? 'now' : '' });
       var top = frame.getBoundingClientRect().top + window.scrollY + marks[at].getBoundingClientRect().top;
-      window.scrollTo({ top: Math.max(0, top - el('manualSearch').offsetHeight - 40), behavior: 'smooth' });
+      window.scrollTo({ top: Math.max(0, top - el('manualSearch').offsetHeight - 40), behavior: instant ? 'auto' : 'smooth' });
       el('manualCount').textContent = 'Place ' + (at + 1) + ' of ' + marks.length;
     };
     var run = function () {
@@ -641,7 +643,7 @@
         Object.keys(h.found).forEach(function (w) {
           html = html.replace(new RegExp('(^|[^A-Za-z0-9])(' + esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[^A-Za-z0-9]|$)', 'g'), '$1<mark>$2</mark>');
         });
-        return '<button type="button" class="mHit" data-i="' + i + '"><b>' + esc(h.b.section || 'Employee Manual') + '</b>' + html + '</button>';
+        return '<button type="button" class="mHit" data-i="' + i + '"><b>' + esc(h.b.section || manualName) + '</b>' + html + '</button>';
       }).join('');
     };
     el('manualSearch').hidden = false;
@@ -662,7 +664,8 @@
       run();
       var idx = -1;
       lastHits.forEach(function (h, k) { if (idx < 0 && want && h.b.text.indexOf(want) === 0) idx = k });
-      setTimeout(function () { go(Math.max(idx, 0)) }, 400);
+      // Again after pictures load and the page grows, so it lands on the spot.
+      [300, 1200, 2500].forEach(function (ms) { setTimeout(function () { go(Math.max(idx, 0), true) }, ms) });
     }
   }
 
