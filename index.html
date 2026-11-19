@@ -116,6 +116,9 @@
   .mHit { display: block; width: 100%; text-align: left; font: 14px/1.4 Arimo, sans-serif; color: var(--text);
     background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
   .mHit b { display: block; font-size: 13px; margin-bottom: 2px; }
+  .links a.mHit { display: block; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; }
+  .links a.mHit small { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  #sopSearch { position: static; margin: 0 0 10px; padding-top: 0; }
   .mHit mark { background: #ffe066; color: #111; border-radius: 3px; }
   .manual { padding: 0; overflow: hidden; }
   .manual iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
@@ -185,6 +188,12 @@
   </section>
 
   <section class="card links" id="sopsPage" hidden>
+    <!-- One search over all the SOPs; a result opens that SOP at that spot. -->
+    <div class="mSearch" id="sopSearch">
+      <input id="sopQ" type="search" placeholder="Search all SOPs (like: tablecloth)" autocomplete="off" enterkeyhint="search">
+      <div class="mBar" id="sopBar" hidden><span id="sopCount"></span></div>
+      <div class="mHits" id="sopHits"></div>
+    </div>
     <div id="sops"></div>
   </section>
 
@@ -248,7 +257,8 @@
     el('homePage').hidden = true;
     el((sopDoc ? 'manual' : data.page) + 'Page').hidden = false;
   }
-  if (data.page === 'sops') el('sub').textContent = 'Tap one to read it';
+  if (data.page === 'sops') { el('sub').textContent = 'Search them all, or tap one to read it'; sopSearch(data) }
+  pendingFind = sopDoc && data.find && data.find.q ? data.find : null;
   if (sopDoc) el('manualQ').placeholder = 'Search this SOP';
   if (data.page === 'report') el('sub').textContent = 'What kind of issue? Tap one.';
   // The list pages keep only their own card, with the whole list.
@@ -474,34 +484,81 @@
   // with its section; tapping one scrolls the manual there. The table of
   // contents is skipped, so results are the real sections.
   var STOP = ['the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'what', 'can', 'i', 'my', 'do', 'about'];
+  // Word matching shared by the manual/SOP search and the all-SOPs search.
+  var norm = function (w) { return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') };
+  var words = function (t) { return t.match(/[A-Za-z0-9\u00C0-\u024F']+/g) || [] };
+  // Letters added, dropped, changed or swapped (so "ei" for "ie" counts as 1).
+  var dist = function (a, b) {
+    var d = [], i, j;
+    for (i = 0; i <= a.length; i++) d[i] = [i];
+    for (j = 0; j <= b.length; j++) d[0][j] = j;
+    for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[a.length][b.length];
+  };
+  // How many slips a word can have: 1, or 2 for long words (so "pricing" doesn't match "peircings").
+  var slip = function (q) { return q.length >= 10 ? 2 : q.length >= 4 ? 1 : 0 };
+  var matches = function (word, q) {
+    var w = norm(word);
+    if (w === q || (q.length >= 3 && w.indexOf(q) === 0)) return true;
+    var max = slip(q);
+    if (!max) return false;
+    if (Math.abs(w.length - q.length) <= max && dist(w, q) <= max) return true;
+    var sw = w.replace(/s$/, ''), sq = q.replace(/s$/, '');
+    if (Math.abs(sw.length - sq.length) <= max && dist(sw, sq) <= max) return true;
+    return q.length >= 5 && w.length > q.length && dist(w.slice(0, q.length), q) <= 1; // a word still being typed
+  };
+
+  var pendingFind = null; // { q, hit } from an all-SOPs search result
+
+  // The SOPs page search: every SOP's paragraphs (data.sopIndex), same word
+  // matching as the manual. Tapping a result opens that SOP at that paragraph.
+  function sopSearch(data) {
+    var index = data.sopIndex || [], timer = null;
+    if (!data.sopIndex) { el('sopSearch').hidden = true; return }
+    var run = function () {
+      var raw = el('sopQ').value.trim();
+      var terms = words(raw).map(norm);
+      var kept = terms.filter(function (t) { return STOP.indexOf(t) < 0 });
+      if (kept.length) terms = kept;
+      el('sopBar').hidden = !terms.length;
+      el('sops').hidden = !!terms.length;
+      if (!terms.length) { el('sopHits').innerHTML = ''; return }
+      var hits = [];
+      index.forEach(function (d) {
+        d.blocks.forEach(function (bl) {
+          var text = bl[1], found = {};
+          var all = terms.every(function (q) {
+            var any = false;
+            words(text).forEach(function (w) { if (matches(w, q)) { found[w] = true; any = true } });
+            return any;
+          });
+          if (all) hits.push({ d: d, section: bl[0], text: text, found: found });
+        });
+      });
+      el('sopCount').textContent = hits.length ? hits.length + (hits.length === 1 ? ' place' : ' places') + ' found · tap one to open it' :
+        'Nothing found for "' + raw + '". Try another word.';
+      el('sopHits').innerHTML = hits.slice(0, 40).map(function (h) {
+        var t = h.text, first = t.length;
+        Object.keys(h.found).forEach(function (w) { var k = t.indexOf(w); if (k >= 0 && k < first) first = k });
+        var start = Math.max(0, first - 50), snip = (start ? '…' : '') + t.slice(start, start + 150) + (start + 150 < t.length ? '…' : '');
+        var html = esc(snip);
+        Object.keys(h.found).forEach(function (w) {
+          html = html.replace(new RegExp('(^|[^A-Za-z0-9])(' + esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[^A-Za-z0-9]|$)', 'g'), '$1<mark>$2</mark>');
+        });
+        var url = data.home + '?page=' + h.d.page + '&q=' + encodeURIComponent(raw) + '&hit=' + encodeURIComponent(t.slice(0, 80));
+        return '<a class="mHit" href="' + esc(url) + '"><small>' + esc(h.d.icon + ' ' + h.d.label) + '</small>' +
+          (h.section && h.section !== t ? '<b>' + esc(h.section) + '</b>' : '') + html + '</a>';
+      }).join('');
+    };
+    el('sopQ').oninput = function () { clearTimeout(timer); timer = setTimeout(run, 300) };
+    el('sopQ').onkeydown = function (ev) { if (ev.key === 'Enter') { clearTimeout(timer); run(); el('sopQ').blur() } };
+  }
+
   function manualSearch(frame) {
     var doc = frame.contentDocument;
-    var norm = function (w) { return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') };
-    var words = function (t) { return t.match(/[A-Za-z0-9\u00C0-\u024F']+/g) || [] };
-    // Letters added, dropped, changed or swapped (so "ei" for "ie" counts as 1).
-    var dist = function (a, b) {
-      var d = [], i, j;
-      for (i = 0; i <= a.length; i++) d[i] = [i];
-      for (j = 0; j <= b.length; j++) d[0][j] = j;
-      for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
-        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-      }
-      return d[a.length][b.length];
-    };
-    // How many slips a word can have: 1, or 2 for long words (so "pricing" doesn't match "peircings").
-    var slip = function (q) { return q.length >= 10 ? 2 : q.length >= 4 ? 1 : 0 };
-    var matches = function (word, q) {
-      var w = norm(word);
-      if (w === q || (q.length >= 3 && w.indexOf(q) === 0)) return true;
-      var max = slip(q);
-      if (!max) return false;
-      if (Math.abs(w.length - q.length) <= max && dist(w, q) <= max) return true;
-      var sw = w.replace(/s$/, ''), sq = q.replace(/s$/, '');
-      if (Math.abs(sw.length - sq.length) <= max && dist(sw, sq) <= max) return true;
-      return q.length >= 5 && w.length > q.length && dist(w.slice(0, q.length), q) <= 1; // a word still being typed
-    };
-
     // Each paragraph and its section heading, in reading order (no table of contents).
     var blocks = [], section = '';
     Array.prototype.forEach.call(doc.body.querySelectorAll('h1, h2, h3, h4, p, li'), function (b) {
@@ -543,6 +600,7 @@
       });
       return first;
     };
+    var lastHits = [];
     var go = function (i) {
       if (!marks.length) return;
       at = (i + marks.length) % marks.length;
@@ -572,6 +630,7 @@
         marks.push(mark);
         hits.push({ b: b, found: found });
       });
+      lastHits = hits;
       el('manualCount').textContent = hits.length ? hits.length + (hits.length === 1 ? ' place' : ' places') + ' found · tap one' :
         'Nothing found for "' + raw + '". Try another word.';
       el('manualHits').innerHTML = hits.slice(0, 40).map(function (h, i) {
@@ -595,6 +654,16 @@
     el('manualPrev').onclick = function () { go(at - 1) };
     el('manualNext').onclick = function () { go(at + 1) };
     el('manualList').onclick = function () { window.scrollTo({ top: el('manualHits').offsetTop - el('manualSearch').offsetHeight - 20, behavior: 'smooth' }) };
+    // Opened from the all-SOPs search: search the same words, jump to that paragraph.
+    if (pendingFind) {
+      var want = pendingFind.hit;
+      el('manualQ').value = pendingFind.q;
+      pendingFind = null;
+      run();
+      var idx = -1;
+      lastHits.forEach(function (h, k) { if (idx < 0 && want && h.b.text.indexOf(want) === 0) idx = k });
+      setTimeout(function () { go(Math.max(idx, 0)) }, 400);
+    }
   }
 
   // The staff code: asked once, then kept on this phone. Every request sends
@@ -625,6 +694,7 @@
         data.api = shell.api;
         data.logos = shell.logos;
         data.tiles.forEach(function (t) { if (t.page) t.url = shell.home + '?page=' + t.page });
+        data.find = { q: shell.q || '', hit: shell.hit || '' };
         render(data);
       })
       .catch(function () {
@@ -651,6 +721,8 @@
   // BOOT (the GitHub Pages copy swaps this line; see scripts/build-dashboard-site.js)
   start({
     page: new URLSearchParams(location.search).get('page') || 'home',
+    q: new URLSearchParams(location.search).get('q') || '',
+    hit: new URLSearchParams(location.search).get('hit') || '',
     home: location.pathname,
     api: 'https://script.google.com/macros/s/AKfycbwBED66CPc7nq88izmLWR3fc0xEcIVlJCgpNkKH-bjVWhGW177NfU2h8xggpDWfjPGy/exec',
     logos: { icon: 'logo-icon.png', horizontal: 'logo-horizontal.png' },
