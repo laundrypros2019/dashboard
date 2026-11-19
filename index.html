@@ -184,6 +184,10 @@
     <div id="links"></div>
   </section>
 
+  <section class="card links" id="sopsPage" hidden>
+    <div id="sops"></div>
+  </section>
+
   <section class="card cal" id="calendarPage" hidden></section>
 
   <nav class="tiles" id="reportPage" aria-label="What kind of issue?" hidden></nav>
@@ -230,17 +234,22 @@
   el('callsOpenLink').href = data.home + '?page=calls';
   el('callsRecentLink').href = data.home + '?page=callsHandled';
   el('homePage').hidden = false;
-  var subPages = { report: '🚩 Report an Issue', staff: '📇 Employee Contacts', manual: '📘 Employee Manual', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
+  var subPages = { report: '🚩 Report an Issue', staff: '📇 Employee Contacts', manual: '📘 Employee Manual', sops: '📋 SOPs', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
     handled: '✅ Recently Handled', calls: '☎️ Open Phone Messages', callsHandled: '✅ Recently Handled Phone Messages' };
+  // One SOP (?page=sop-<key>) shows like the manual, under its own title.
+  var sopDoc = /^sop-/.test(data.page);
+  if (sopDoc) subPages[data.page] = data.docTitle || '📋 SOP';
   if (subPages[data.page]) {
     el('back').hidden = false;
     el('greet').textContent = subPages[data.page];
     el('sub').textContent = 'Tap the logo to go home';
   }
-  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report' || data.page === 'staff' || data.page === 'manual') {
+  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report' || data.page === 'staff' || data.page === 'manual' || data.page === 'sops' || sopDoc) {
     el('homePage').hidden = true;
-    el(data.page + 'Page').hidden = false;
+    el((sopDoc ? 'manual' : data.page) + 'Page').hidden = false;
   }
+  if (data.page === 'sops') el('sub').textContent = 'Tap one to read it';
+  if (sopDoc) el('manualQ').placeholder = 'Search this SOP';
   if (data.page === 'report') el('sub').textContent = 'What kind of issue? Tap one.';
   // The list pages keep only their own card, with the whole list.
   var calls = data.calls || { open: [], recent: [], openCount: 0 };
@@ -270,11 +279,11 @@
       }).join('');
     if (people) el('sub').textContent = people.length + ' people · tap a number to call';
   }
-  if (data.page === 'manual') {
+  if (data.page === 'manual' || sopDoc) {
     var frame = el('manualFrame');
     if (!data.manual) {
       el('manualPage').classList.remove('manual');
-      el('manualPage').innerHTML = '<div class="empty">The manual couldn\'t load. Try again in a minute, or ask Mike.</div>';
+      el('manualPage').innerHTML = '<div class="empty">' + (sopDoc ? 'This SOP' : 'The manual') + ' couldn\'t load. Try again in a minute, or ask Mike.</div>';
     } else {
       el('sub').textContent = 'Always the latest version · tap the logo to go home';
       // Fit the doc to a phone; links open in a new tab.
@@ -415,6 +424,9 @@
 
   el('links').innerHTML = data.links.map(function (l) {
     return '<a href="' + esc(l.url) + '">' + esc(l.label) + '<span aria-hidden="true">›</span></a>';
+  }).join('');
+  el('sops').innerHTML = (data.sops || []).map(function (d) {
+    return '<a href="' + esc(data.home + '?page=' + d.page) + '">' + esc(d.icon + ' ' + d.label) + '<span aria-hidden="true">›</span></a>';
   }).join('');
   }
 
