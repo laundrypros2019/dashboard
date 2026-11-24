@@ -79,10 +79,19 @@
     border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
   .closer .cBtns { display: flex; gap: 8px; }
   .closer button { font: 700 15px Arimo, sans-serif; padding: 10px 16px; border-radius: 10px; border: 1.5px solid var(--text); }
-  .closer .cSave { background: var(--text); color: var(--card); flex: 1; }
+  .closer .cSave, .closer .cmSave { background: var(--text); color: var(--card); flex: 1; }
   .closer .cCancel { background: var(--card); color: var(--text); }
   .closer .cMsg { font-size: 13px; color: var(--red); margin-top: 8px; }
   .closer .cMsg:empty { display: none; }
+  .closer textarea { display: block; width: 100%; margin-top: 4px; font: 16px Arimo, sans-serif; padding: 9px 10px; min-height: 70px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); resize: vertical; }
+  .rowBtns { flex: none; align-self: center; display: flex; flex-direction: column; gap: 6px; }
+  .openRow .item.tap { cursor: pointer; }
+  .detail { margin: 0 0 12px 28px; padding: 12px; border-radius: 12px; background: var(--bg); font-size: 14px; }
+  .detail .dDesc { white-space: pre-wrap; margin-bottom: 10px; }
+  .detail h4 { font-size: 13px; margin: 0 0 6px; color: var(--muted); }
+  .detail .cm + .cm { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .detail .cm .n { font-size: 12px; color: var(--muted); }
   .links a { display: flex; justify-content: space-between; padding: 11px 0; border-top: 1px solid var(--line);
     color: var(--text); text-decoration: none; font-size: 15px; }
   .links a:first-of-type { border-top: 0; }
@@ -367,8 +376,9 @@
   // date · time · title · submitter, newest first.
   var row = function (r, mark, tail) {
     var meta = [r.when, r.by && 'by ' + r.by].filter(Boolean).join(' · ');
-    var extra = [r.closed && 'handled ' + r.closed + (r.staff ? ' by ' + r.staff : ''), r.note].filter(Boolean).join(' · ');
-    return '<div class="item">' + mark + '<div class="grow"><div class="n">' + esc(meta) + '</div><div class="t">' + esc(r.title) +
+    var extra = [r.closed && 'handled ' + r.closed + (r.staff ? ' by ' + r.staff : ''), r.note,
+      r.comments && (r.comments.length ? '💬 ' + r.comments.length + ' comment' + (r.comments.length === 1 ? '' : 's') + ' · tap to see' : 'Tap to see details')].filter(Boolean).join(' · ');
+    return '<div class="item' + (r.comments ? ' tap' : '') + '">' + mark + '<div class="grow"><div class="n">' + esc(meta) + '</div><div class="t">' + esc(r.title) +
       '</div>' + (extra ? '<div class="n">' + esc(extra) + '</div>' : '') + '</div>' + (tail || '') + '</div>';
   };
   // Open lists (with Close buttons) and handled lists: issues, then phone messages.
@@ -381,12 +391,15 @@
   var staffOptions = '<option value="">Pick your name</option>' + (data.staff || []).map(function (n) {
     return '<option>' + esc(n) + '</option>';
   }).join('');
+  var issueById = {};
   lists.forEach(function (L) {
     var d = L.d;
     if (d.openCount > d.open.length) el(L.open + 'Count').textContent = '· ' + d.openCount;
     el(L.open).innerHTML = d.open.length ? d.open.map(function (r) {
       var btn = r.id && data.api ? '<button class="closeBtn" type="button" data-id="' + esc(r.id) + '">Close</button>' : '';
-      return '<div class="openRow">' + row(r, '<span class="dot" aria-hidden="true">•</span>', btn) + '</div>';
+      if (btn && r.comments) btn = '<div class="rowBtns">' + btn + '<button class="closeBtn commentBtn" type="button">Comment</button></div>';
+      if (r.id) issueById[r.id] = r;
+      return '<div class="openRow" data-id="' + esc(r.id || '') + '">' + row(r, '<span class="dot" aria-hidden="true">•</span>', btn) + '</div>';
     }).join('') : '<div class="empty">' + L.none + '</div>';
     el(L.open).onclick = function (ev) { closeClick(ev, L.example) };
     el(L.recent).innerHTML = d.recent.length ? d.recent.map(function (r) {
@@ -396,13 +409,75 @@
 
   // Close button: who handled it + an optional note, then mark it Done
   // (doPost in StaffHub.js updates Notion and the Jotform table).
+  // Comment button / tapping an issue (Mike, 2026-11-24): anyone can add a
+  // comment (name + text); tapping the issue shows its description and every
+  // comment. doPost → hubCommentIssue_ saves it in Notion's "Comments" column.
+  function detailHtml(r) {
+    var cms = (r.comments || []).map(function (c) {
+      return '<div class="cm"><div class="n">' + esc([c.when, c.by].filter(Boolean).join(' · ')) + '</div><div>' + esc(c.text) + '</div></div>';
+    }).join('');
+    return '<div class="detail">' + (r.desc ? '<div class="dDesc">' + esc(r.desc) + '</div>' : '') +
+      '<h4>💬 Comments</h4>' + (cms || '<div class="n">No comments yet. Tap Comment to add one.</div>') + '</div>';
+  }
+  function showDetail(openRow) {
+    var old = openRow.querySelector('.detail');
+    var html = detailHtml(issueById[openRow.getAttribute('data-id')] || {});
+    if (old) old.outerHTML = html; else openRow.querySelector('.item').insertAdjacentHTML('afterend', html);
+  }
+  function commentClick(t, openRow) {
+    var panel = openRow.querySelector('.closer');
+    if (t.classList.contains('commentBtn')) {
+      if (panel) { var wasComment = panel.classList.contains('commenter'); panel.remove(); if (wasComment) return true; }
+      if (!openRow.querySelector('.detail')) showDetail(openRow);
+      openRow.insertAdjacentHTML('beforeend', '<div class="closer commenter">' +
+        '<label>Your name<select class="cStaff">' + staffOptions + '</select></label>' +
+        '<label>Comment<textarea class="cText" maxlength="500" placeholder="Like: Called the repair guy, coming Tuesday"></textarea></label>' +
+        '<div class="cBtns"><button class="cmSave" type="button">Add comment</button>' +
+        '<button class="cCancel" type="button">Cancel</button></div><div class="cMsg"></div></div>');
+      return true;
+    }
+    if (!t.classList.contains('cmSave')) return false;
+    var staff = panel.querySelector('.cStaff').value, text = panel.querySelector('.cText').value.trim();
+    var msg = panel.querySelector('.cMsg');
+    if (!staff) { msg.textContent = 'Pick your name first.'; return true; }
+    if (!text) { msg.textContent = 'Type a comment first.'; return true; }
+    t.disabled = true;
+    t.textContent = 'Saving…';
+    fetch(data.api, {
+      method: 'POST',
+      credentials: 'omit',
+      body: JSON.stringify({ action: 'comment', id: openRow.getAttribute('data-id'), staff: staff, text: text, code: staffCode }),
+    }).then(function (r) { return r.json() }).then(function (res) {
+      if (!res.ok) throw new Error(res.error || 'Something went wrong.');
+      var r = issueById[openRow.getAttribute('data-id')];
+      r.comments = res.comments;
+      var n = openRow.querySelector('.item .grow .n:last-child');
+      if (n && n !== openRow.querySelector('.item .grow .n')) n.textContent = '💬 ' + r.comments.length + ' comment' + (r.comments.length === 1 ? '' : 's') + ' · tap to see';
+      panel.remove();
+      showDetail(openRow);
+    }).catch(function (err) {
+      t.disabled = false;
+      t.textContent = 'Add comment';
+      msg.textContent = (err && err.message && err.message.indexOf('Failed to fetch') < 0 ? err.message : 'Couldn\'t save. Check your internet and try again.');
+    });
+    return true;
+  }
+
   function closeClick(ev, example) {
     var t = ev.target;
     var openRow = t.closest && t.closest('.openRow');
     if (!openRow) return;
+    if (commentClick(t, openRow)) return;
     var panel = openRow.querySelector('.closer');
+    // Tapping the issue itself opens / folds its details and comments.
+    if (!t.closest('button, .closer, .detail') && t.closest('.item.tap')) {
+      var d = openRow.querySelector('.detail');
+      if (d) d.remove(); else showDetail(openRow);
+      return;
+    }
     if (t.classList.contains('closeBtn')) {
-      if (panel) return panel.remove();
+      if (panel && !panel.classList.contains('commenter')) return panel.remove();
+      if (panel) panel.remove();
       openRow.insertAdjacentHTML('beforeend', '<div class="closer">' +
         '<label>Who handled it?<select class="cStaff">' + staffOptions + '</select></label>' +
         '<label>How was it handled? (optional)<input class="cNote" maxlength="500" placeholder="' + esc(example) + '"></label>' +
