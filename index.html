@@ -127,7 +127,14 @@
   .mHit b { display: block; font-size: 13px; margin-bottom: 2px; }
   .links a.mHit { display: block; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; }
   .links a.mHit small { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-  #sopSearch { position: static; margin: 0 0 10px; padding-top: 0; }
+  #sopSearch, #vidSearch { position: static; margin: 0 0 10px; padding-top: 0; }
+  .vid { border-top: 1px solid var(--line); }
+  .vid:first-child { border-top: 0; }
+  .vid > button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 11px 0; font: 15px Arimo, sans-serif;
+    color: var(--text); background: none; border: 0; text-align: left; cursor: pointer; }
+  .vid > button span { margin-left: auto; color: var(--muted); }
+  .vid .frame { position: relative; padding-top: 56.25%; margin-bottom: 12px; border-radius: 12px; overflow: hidden; background: #000; }
+  .vid .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .mHit mark { background: #ffe066; color: #111; border-radius: 3px; }
   .manual { padding: 0; overflow: hidden; }
   .manual iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
@@ -206,6 +213,15 @@
     <div id="sops"></div>
   </section>
 
+  <!-- Folding Videos (Mike, 2026-11-24): search, then tap one to play it here. -->
+  <section class="card links" id="videosPage" hidden>
+    <div class="mSearch" id="vidSearch">
+      <input id="vidQ" type="search" placeholder="Search (like: pants)" autocomplete="off" enterkeyhint="search">
+      <div class="mBar" id="vidBar" hidden><span id="vidCount"></span></div>
+    </div>
+    <div id="videos"></div>
+  </section>
+
   <section class="card cal" id="calendarPage" hidden></section>
 
   <nav class="tiles" id="reportPage" aria-label="What kind of issue?" hidden></nav>
@@ -252,7 +268,7 @@
   el('callsOpenLink').href = data.home + '?page=calls';
   el('callsRecentLink').href = data.home + '?page=callsHandled';
   el('homePage').hidden = false;
-  var subPages = { report: '🚩 Report an Issue', staff: '📇 Employee Contacts', manual: '📘 Employee Manual', sops: '📋 SOPs', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
+  var subPages = { report: '🚩 Report an Issue', staff: '📇 Employee Contacts', manual: '📘 Employee Manual', sops: '📋 SOPs', videos: '🎥 Folding Videos', links: '🔗 Links', calendar: '📅 Company Calendar', open: '🚩 Open Issues',
     handled: '✅ Recently Handled', calls: '☎️ Open Phone Messages', callsHandled: '✅ Recently Handled Phone Messages' };
   // One SOP (?page=sop-<key>) shows like the manual, under its own title.
   var sopDoc = /^sop-/.test(data.page);
@@ -262,11 +278,12 @@
     el('greet').textContent = subPages[data.page];
     el('sub').textContent = 'Tap the logo to go home';
   }
-  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report' || data.page === 'staff' || data.page === 'manual' || data.page === 'sops' || sopDoc) {
+  if (data.page === 'links' || data.page === 'calendar' || data.page === 'report' || data.page === 'staff' || data.page === 'manual' || data.page === 'sops' || data.page === 'videos' || sopDoc) {
     el('homePage').hidden = true;
     el((sopDoc ? 'manual' : data.page) + 'Page').hidden = false;
   }
   if (data.page === 'sops') { el('sub').textContent = 'Search them all, or tap one to read it'; sopSearch(data) }
+  if (data.page === 'videos') { el('sub').textContent = 'Search, then tap a video to play it'; videoList(data) }
   pendingFind = sopDoc && data.find && data.find.q ? data.find : null;
   if (sopDoc) manualName = data.docTitle || 'SOP';
   if (sopDoc) el('manualQ').placeholder = 'Search this SOP';
@@ -632,6 +649,43 @@
     };
     el('sopQ').oninput = function () { clearTimeout(timer); timer = setTimeout(run, 300) };
     el('sopQ').onkeydown = function (ev) { if (ev.key === 'Enter') { clearTimeout(timer); run(); el('sopQ').blur() } };
+  }
+
+  // The Folding Videos page: every video in a list; typing filters it (title
+  // and extra search words, same spelling-slip matching as the manual).
+  // Tapping one plays it right here; tapping again folds it away.
+  function videoList(data) {
+    var list = data.videos || [];
+    el('videos').innerHTML = list.map(function (v, i) {
+      return '<div class="vid" data-i="' + i + '"><button type="button">▶️ ' + esc(v.title) + '<span>›</span></button></div>';
+    }).join('');
+    el('videos').onclick = function (ev) {
+      var b = ev.target.closest && ev.target.closest('.vid > button');
+      if (!b) return;
+      var box = b.parentNode, open = box.querySelector('.frame');
+      Array.prototype.forEach.call(el('videos').querySelectorAll('.frame'), function (f) { f.remove() });
+      if (open) return;
+      var v = list[+box.getAttribute('data-i')];
+      box.insertAdjacentHTML('beforeend', '<div class="frame"><iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(v.id) +
+        '?autoplay=1&rel=0&playsinline=1" title="' + esc(v.title) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>');
+    };
+    var run = function () {
+      var raw = el('vidQ').value.trim();
+      var terms = words(raw).map(norm);
+      var kept = terms.filter(function (t) { return STOP.indexOf(t) < 0 });
+      if (kept.length) terms = kept;
+      var shown = 0;
+      Array.prototype.forEach.call(el('videos').children, function (box) {
+        var v = list[+box.getAttribute('data-i')], ws = words(v.title + ' ' + (v.words || ''));
+        var ok = terms.every(function (q) { return ws.some(function (w) { return matches(w, q) }) });
+        box.hidden = !ok;
+        if (ok) shown++;
+        else { var f = box.querySelector('.frame'); if (f) f.remove() }
+      });
+      el('vidBar').hidden = !terms.length;
+      el('vidCount').textContent = shown ? shown + (shown === 1 ? ' video' : ' videos') + ' found' : 'No video for "' + raw + '" yet. Ask Mike.';
+    };
+    el('vidQ').oninput = run;
   }
 
   function manualSearch(frame) {
