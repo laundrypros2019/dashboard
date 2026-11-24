@@ -674,14 +674,19 @@
       var terms = words(raw).map(norm);
       var kept = terms.filter(function (t) { return STOP.indexOf(t) < 0 });
       if (kept.length) terms = kept;
-      var shown = 0;
+      var shown = 0, exact = [], near = [];
       Array.prototype.forEach.call(el('videos').children, function (box) {
         var v = list[+box.getAttribute('data-i')], ws = words(v.title + ' ' + (v.words || ''));
         var ok = terms.every(function (q) { return ws.some(function (w) { return matches(w, q) }) });
         box.hidden = !ok;
         if (ok) shown++;
         else { var f = box.querySelector('.frame'); if (f) f.remove() }
+        // Exact word matches go first ("pants" → Pants above Panties).
+        var sure = ok && terms.every(function (q) { return ws.some(function (w) { w = norm(w); return w === q || w.indexOf(q) === 0 }) });
+        (sure ? exact : near).push(box);
       });
+      var byIndex = function (a, b) { return a.getAttribute('data-i') - b.getAttribute('data-i') };
+      exact.sort(byIndex).concat(near.sort(byIndex)).forEach(function (box) { el('videos').appendChild(box) });
       el('vidBar').hidden = !terms.length;
       el('vidCount').textContent = shown ? shown + (shown === 1 ? ' video' : ' videos') + ' found' : 'No video for "' + raw + '" yet. Ask Mike.';
     };
