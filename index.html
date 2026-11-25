@@ -134,7 +134,7 @@
     color: var(--text); background: none; border: 0; text-align: left; cursor: pointer; }
   .vid > button span { margin-left: auto; color: var(--muted); }
   .vid .frame { position: relative; padding-top: 56.25%; margin-bottom: 12px; border-radius: 12px; overflow: hidden; background: #000; }
-  .vid .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .vid .frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
   .mHit mark { background: #ffe066; color: #111; border-radius: 3px; }
   .manual { padding: 0; overflow: hidden; }
   .manual iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
@@ -666,8 +666,10 @@
       Array.prototype.forEach.call(el('videos').querySelectorAll('.frame'), function (f) { f.remove() });
       if (open) return;
       var v = list[+box.getAttribute('data-i')];
-      box.insertAdjacentHTML('beforeend', '<div class="frame"><iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(v.id) +
-        '?autoplay=1&rel=0&playsinline=1" title="' + esc(v.title) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>');
+      // The files live on the dashboard's GitHub Pages site (videos/<id>.mp4), so
+      // nobody has to sign in to YouTube to watch (Mike, 2026-11-25).
+      box.insertAdjacentHTML('beforeend', '<div class="frame"><video src="https://laundrypros2019.github.io/dashboard/videos/' + encodeURIComponent(v.id) +
+        '.mp4" title="' + esc(v.title) + '" controls autoplay playsinline preload="metadata"></video></div>');
     };
     var run = function () {
       var raw = el('vidQ').value.trim();
